@@ -9,80 +9,179 @@ import SpriteKit
 import GameplayKit
 
 class GameScene: SKScene {
+    var enemyRadius: CGFloat = 20
+//    let player = SKSpriteNode(imageNamed: "player")
+//    let enemy = SKSpriteNode(imageNamed: "enemy")
+    let playerCategory: UInt32 = 0x1 << 1
+    let enemyCategory: UInt32 = 0x1 << 0
     
-    private var label : SKLabelNode?
-    private var spinnyNode : SKShapeNode?
+    let playerCircle = SKShapeNode(circleOfRadius: 20)
+    var enemyCircle = SKShapeNode()
+    
+    var scoreLabel: SKLabelNode!
+    var score: Int = 0{
+        didSet{scoreLabel.text = "Score: \(score)"}
+    }
+    
+    var enemySizeW: CGFloat = 0
+    var enemySizeH: CGFloat = 0
+    
+    var gameTimer: Timer!
     
     override func didMove(to view: SKView) {
+        super.didMove(to: view)
+
+        physicsWorld.contactDelegate = self
+        playerCircle.position = CGPoint(x: frame.midX, y: frame.maxY)
+        playerCircle.strokeColor = .black
+        playerCircle.glowWidth = 1.0
+        playerCircle.fillColor = .white
+        playerCircle.fillTexture = SKTexture(imageNamed: "player")
+        playerCircle.physicsBody = SKPhysicsBody(circleOfRadius: playerCircle.frame.size.width / 2)
+        playerCircle.physicsBody?.isDynamic = false
+        playerCircle.physicsBody?.categoryBitMask = playerCategory
+        playerCircle.physicsBody?.contactTestBitMask = enemyCategory
+        playerCircle.physicsBody?.collisionBitMask = 0
+//        print(playerCircle.frame.size)
         
-        // Get label node from scene and store it for use later
-        self.label = self.childNode(withName: "//helloLabel") as? SKLabelNode
-        if let label = self.label {
-            label.alpha = 0.0
-            label.run(SKAction.fadeIn(withDuration: 2.0))
-        }
+        enemyCircle = SKShapeNode(circleOfRadius: enemyRadius)
+        enemyCircle.strokeColor = .black
+        enemyCircle.glowWidth = 1.0
+        enemyCircle.fillColor = .white
+        enemyCircle.fillTexture = SKTexture(imageNamed: "enemy")
+        enemyCircle.physicsBody = SKPhysicsBody(circleOfRadius: enemyCircle.frame.size.width / 2)
+        enemyCircle.physicsBody?.isDynamic = false
+        enemyCircle.physicsBody?.categoryBitMask = enemyCategory
+        enemyCircle.physicsBody?.contactTestBitMask = playerCategory
+        enemyCircle.physicsBody?.collisionBitMask = 0
+        enemyCircle.physicsBody?.usesPreciseCollisionDetection = true
         
-        // Create shape node to use during mouse interaction
-        let w = (self.size.width + self.size.height) * 0.05
-        self.spinnyNode = SKShapeNode.init(rectOf: CGSize.init(width: w, height: w), cornerRadius: w * 0.3)
         
-        if let spinnyNode = self.spinnyNode {
-            spinnyNode.lineWidth = 2.5
-            
-            spinnyNode.run(SKAction.repeatForever(SKAction.rotate(byAngle: CGFloat(Double.pi), duration: 1)))
-            spinnyNode.run(SKAction.sequence([SKAction.wait(forDuration: 0.5),
-                                              SKAction.fadeOut(withDuration: 0.5),
-                                              SKAction.removeFromParent()]))
-        }
-    }
-    
-    
-    func touchDown(atPoint pos : CGPoint) {
-        if let n = self.spinnyNode?.copy() as! SKShapeNode? {
-            n.position = pos
-            n.strokeColor = SKColor.green
-            self.addChild(n)
-        }
-    }
-    
-    func touchMoved(toPoint pos : CGPoint) {
-        if let n = self.spinnyNode?.copy() as! SKShapeNode? {
-            n.position = pos
-            n.strokeColor = SKColor.blue
-            self.addChild(n)
-        }
-    }
-    
-    func touchUp(atPoint pos : CGPoint) {
-        if let n = self.spinnyNode?.copy() as! SKShapeNode? {
-            n.position = pos
-            n.strokeColor = SKColor.red
-            self.addChild(n)
-        }
-    }
-    
-    override func touchesBegan(_ touches: Set<UITouch>, with event: UIEvent?) {
-        if let label = self.label {
-            label.run(SKAction.init(named: "Pulse")!, withKey: "fadeInOut")
-        }
+        enemySizeW = enemyCircle.frame.width
+        enemySizeH = enemyCircle.frame.height
         
-        for t in touches { self.touchDown(atPoint: t.location(in: self)) }
+        addChild(playerCircle)
+        addChild(enemyCircle)
+        
+//        player.size = CGSize(width: player.size.width/2, height: player.size.height/2)
+//        player.position =  CGPoint(x: size.width/2, y: size.height/2)
+//        player.physicsBody = SKPhysicsBody(circleOfRadius: player.size.height/4)
+//        player.physicsBody?.isDynamic = false
+//
+//        enemy.size = CGSize(width: enemy.size.width/3, height: enemy.size.height/3)
+//        enemy.physicsBody = SKPhysicsBody(circleOfRadius: (enemy.size.height/3)/2)
+//        enemy.physicsBody?.isDynamic = false
+////        enemy.position = CGPoint(x: size.width, y: size.height)
+//
+//        addChild(player)
+//        addChild(enemy)
+        
+        scoreLabel = SKLabelNode(text: "Score: 0")
+        scoreLabel.position = CGPoint(x: 100, y: view.frame.size.height - 60)
+        scoreLabel.fontName = "AmericanTypewriter-Bold"
+        scoreLabel.fontSize = 36
+        scoreLabel.fontColor = .white
+        score = 0
+        
+        addChild(scoreLabel)
+        
+        move(node: enemyCircle, to: playerCircle.position, speed: 80)
+        moveEnemy()
+        
+        gameTimer = Timer.scheduledTimer(timeInterval: 1, target: self, selector: #selector(addRadius), userInfo: nil, repeats: true)
     }
     
-    override func touchesMoved(_ touches: Set<UITouch>, with event: UIEvent?) {
-        for t in touches { self.touchMoved(toPoint: t.location(in: self)) }
+    @objc func addRadius(){
+        enemySizeW += 1
+        enemySizeH += 1
+        enemyRadius += 1
+        print(enemyRadius)
+//        enemyCircle.setScale(1.1)
+        
+//        let increase = SKAction.scale(to: CGSize(width: enemySizeW, height: enemySizeH), duration: 0.5)
+//        let increase = SKAction.resize(toWidth: enemySizeW, height: enemySizeH, duration: 0.5)
+//        enemyCircle.run(increase)
+//        enemyRadius += 1
+        score += 1
+        print("Score is \(score)")
     }
     
     override func touchesEnded(_ touches: Set<UITouch>, with event: UIEvent?) {
-        for t in touches { self.touchUp(atPoint: t.location(in: self)) }
+        super.touchesEnded(touches, with: event)
+        
+        move(node: playerCircle, to: (touches.first?.location(in: self))!, speed: 120)
+//        moveEnemy()
+        
+//        let fadeOut = SKAction.fadeOut(withDuration: 1)
+//        let moveUp = SKAction.move(to: CGPoint(x: size.width/2, y: size.height), duration: 1)
+//        let group  = SKAction.group([fadeOut, moveUp])
+//        player.run(group)
     }
     
-    override func touchesCancelled(_ touches: Set<UITouch>, with event: UIEvent?) {
-        for t in touches { self.touchUp(atPoint: t.location(in: self)) }
+    func moveEnemy(){
+        move(node: enemyCircle, to: playerCircle.position, speed: 80, completion: moveEnemy)
+    }
+    
+    func move(node: SKNode, to: CGPoint, speed: CGFloat, completion: (()->Void)? = nil){
+        let x = node.position.x
+        let y = node.position.y
+        let distance =  sqrt((x - to.x) * (x - to.x) + (y - to.y) * (y - to.y))
+        let duration = TimeInterval(distance / speed)
+        
+        let move = SKAction.move(to: to, duration: duration)
+        node.run(move, completion: completion ?? { })
+    }
+    func gameOver(){
+        
+        gameTimer.invalidate()
+        let scene = GameOverScene(size: size)
+        scene.score = score
+        let reveal = SKTransition.flipHorizontal(withDuration: 0.5)
+        self.view?.presentScene(scene, transition: reveal)
+    }
+    
+    override func didEvaluateActions() {
+        super.didEvaluateActions()
+//        if enemyCircle.frame.intersects(playerCircle.frame){
+//            gameTimer.invalidate()
+//            let scene = GameOverScene(size: size)
+//            scene.score = score
+//            let reveal = SKTransition.flipHorizontal(withDuration: 0.5)
+//            view?.presentScene(scene, transition: reveal)
+//        }
     }
     
     
-    override func update(_ currentTime: TimeInterval) {
-        // Called before each frame is rendered
+}
+
+extension GameScene: SKPhysicsContactDelegate{
+    
+    func didBegin(_ contact: SKPhysicsContact) {
+        
+        var firstBody: SKPhysicsBody
+        var secondBody: SKPhysicsBody
+        
+        if contact.bodyA.categoryBitMask < contact.bodyB.categoryBitMask{
+            firstBody = contact.bodyA
+            secondBody =  contact.bodyB
+        } else {
+            firstBody = contact.bodyB
+            secondBody =  contact.bodyA
+        }
+        
+        if (firstBody.categoryBitMask & enemyCategory) != 0 && (secondBody.categoryBitMask & playerCategory) != 0{
+            gameOver()
+        }
+        
+        
+//        if contact.bodyA.categoryBitMask == playerCategory || contact.bodyB.categoryBitMask == playerCategory{
+//            print("contact")
+//            gameTimer.invalidate()
+//            let scene = GameOverScene(size: size)
+//            scene.score = score
+//            let reveal = SKTransition.flipHorizontal(withDuration: 0.5)
+//            view?.presentScene(scene, transition: reveal)
+//        }
     }
+    
 }
