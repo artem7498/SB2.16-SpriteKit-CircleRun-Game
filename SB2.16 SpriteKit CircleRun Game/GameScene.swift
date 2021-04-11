@@ -5,76 +5,43 @@
 //  Created by Артём on 4/8/21.
 //
 
+//struct PhysicsCategory {
+//  static let none      : UInt32 = 0
+//  static let all       : UInt32 = UInt32.max
+//  static let monster   : UInt32 = 0b1       // 1
+//  static let projectile: UInt32 = 0b10      // 2
+//}
+
 import SpriteKit
 import GameplayKit
 
 class GameScene: SKScene {
     var enemyRadius: CGFloat = 20
-//    let player = SKSpriteNode(imageNamed: "player")
-//    let enemy = SKSpriteNode(imageNamed: "enemy")
-    let playerCategory: UInt32 = 0x1 << 1
-    let enemyCategory: UInt32 = 0x1 << 0
+    
+    let none: UInt32 = 0
+    let playerCategory: UInt32 = 0b1 // 1
+    let enemyCategory: UInt32 = 0b10 // 2
     
     let playerCircle = SKShapeNode(circleOfRadius: 20)
     var enemyCircle = SKShapeNode()
+    var enemyPosition = CGPoint(x: 0, y: 0)
     
     var scoreLabel: SKLabelNode!
     var score: Int = 0{
         didSet{scoreLabel.text = "Score: \(score)"}
     }
     
-    var enemySizeW: CGFloat = 0
-    var enemySizeH: CGFloat = 0
-    
-    var gameTimer: Timer!
+    var radiusUpdateTimer: Timer!
+    var scoreTimer: Timer!
     
     override func didMove(to view: SKView) {
         super.didMove(to: view)
 
         physicsWorld.contactDelegate = self
-        playerCircle.position = CGPoint(x: frame.midX, y: frame.maxY)
-        playerCircle.strokeColor = .black
-        playerCircle.glowWidth = 1.0
-        playerCircle.fillColor = .white
-        playerCircle.fillTexture = SKTexture(imageNamed: "player")
-        playerCircle.physicsBody = SKPhysicsBody(circleOfRadius: playerCircle.frame.size.width / 2)
-        playerCircle.physicsBody?.isDynamic = false
-        playerCircle.physicsBody?.categoryBitMask = playerCategory
-        playerCircle.physicsBody?.contactTestBitMask = enemyCategory
-        playerCircle.physicsBody?.collisionBitMask = 0
-//        print(playerCircle.frame.size)
-        
-        enemyCircle = SKShapeNode(circleOfRadius: enemyRadius)
-        enemyCircle.strokeColor = .black
-        enemyCircle.glowWidth = 1.0
-        enemyCircle.fillColor = .white
-        enemyCircle.fillTexture = SKTexture(imageNamed: "enemy")
-        enemyCircle.physicsBody = SKPhysicsBody(circleOfRadius: enemyCircle.frame.size.width / 2)
-        enemyCircle.physicsBody?.isDynamic = false
-        enemyCircle.physicsBody?.categoryBitMask = enemyCategory
-        enemyCircle.physicsBody?.contactTestBitMask = playerCategory
-        enemyCircle.physicsBody?.collisionBitMask = 0
-        enemyCircle.physicsBody?.usesPreciseCollisionDetection = true
-        
-        
-        enemySizeW = enemyCircle.frame.width
-        enemySizeH = enemyCircle.frame.height
-        
-        addChild(playerCircle)
-        addChild(enemyCircle)
-        
-//        player.size = CGSize(width: player.size.width/2, height: player.size.height/2)
-//        player.position =  CGPoint(x: size.width/2, y: size.height/2)
-//        player.physicsBody = SKPhysicsBody(circleOfRadius: player.size.height/4)
-//        player.physicsBody?.isDynamic = false
-//
-//        enemy.size = CGSize(width: enemy.size.width/3, height: enemy.size.height/3)
-//        enemy.physicsBody = SKPhysicsBody(circleOfRadius: (enemy.size.height/3)/2)
-//        enemy.physicsBody?.isDynamic = false
-////        enemy.position = CGPoint(x: size.width, y: size.height)
-//
-//        addChild(player)
-//        addChild(enemy)
+        physicsWorld.gravity = .zero
+                
+        addPlayer()
+        addEnemy(position: enemyPosition)
         
         scoreLabel = SKLabelNode(text: "Score: 0")
         scoreLabel.position = CGPoint(x: 100, y: view.frame.size.height - 60)
@@ -85,23 +52,58 @@ class GameScene: SKScene {
         
         addChild(scoreLabel)
         
-        move(node: enemyCircle, to: playerCircle.position, speed: 80)
+//        move(node: enemyCircle, to: playerCircle.position, speed: 80)
         moveEnemy()
         
-        gameTimer = Timer.scheduledTimer(timeInterval: 1, target: self, selector: #selector(addRadius), userInfo: nil, repeats: true)
+        scoreTimer = Timer.scheduledTimer(timeInterval: 1, target: self, selector: #selector(addScore), userInfo: nil, repeats: true)
+        radiusUpdateTimer = Timer.scheduledTimer(timeInterval: 5, target: self, selector: #selector(addRadius), userInfo: nil, repeats: true)
+    }
+    
+    func addPlayer(){
+        playerCircle.position = CGPoint(x: frame.midX, y: frame.maxY)
+        playerCircle.strokeColor = .black
+        playerCircle.glowWidth = 1.0
+        playerCircle.fillColor = .white
+        playerCircle.fillTexture = SKTexture(imageNamed: "player")
+        playerCircle.physicsBody = SKPhysicsBody(circleOfRadius: 20, center: CGPoint(x: 0.5, y: 0.5))
+        playerCircle.physicsBody?.isDynamic = true
+//        playerCircle.physicsBody?.affectedByGravity = false
+        playerCircle.physicsBody?.categoryBitMask = playerCategory
+        playerCircle.physicsBody?.contactTestBitMask = enemyCategory
+        playerCircle.physicsBody?.collisionBitMask = 0
+//        print(playerCircle.frame.size)
+        addChild(playerCircle)
+    }
+    
+    func addEnemy(position: CGPoint){
+        enemyCircle = SKShapeNode(circleOfRadius: enemyRadius)
+        enemyCircle.position = position
+        enemyCircle.strokeColor = .black
+        enemyCircle.glowWidth = 1.0
+        enemyCircle.fillColor = .white
+        enemyCircle.fillTexture = SKTexture(imageNamed: "enemy")
+        enemyCircle.physicsBody = SKPhysicsBody(circleOfRadius: enemyRadius, center: CGPoint(x: 0.5, y: 0.5))
+        enemyCircle.physicsBody?.isDynamic = true
+        enemyCircle.physicsBody?.categoryBitMask = enemyCategory
+        enemyCircle.physicsBody?.contactTestBitMask = playerCategory
+        enemyCircle.physicsBody?.collisionBitMask = 0
+        enemyCircle.physicsBody?.usesPreciseCollisionDetection = false
+        addChild(enemyCircle)
+    }
+    
+    @objc func addScore(){
+        score += 1
     }
     
     @objc func addRadius(){
-        enemySizeW += 1
-        enemySizeH += 1
+//        попробовать заменять нод на новый с увеличенным радиусом, удаляя предыдущий
         enemyRadius += 1
         print(enemyRadius)
-//        enemyCircle.setScale(1.1)
+        enemyPosition = enemyCircle.position
+        enemyCircle.removeFromParent()
+        addEnemy(position: enemyPosition)
+        moveEnemy()
         
-//        let increase = SKAction.scale(to: CGSize(width: enemySizeW, height: enemySizeH), duration: 0.5)
-//        let increase = SKAction.resize(toWidth: enemySizeW, height: enemySizeH, duration: 0.5)
-//        enemyCircle.run(increase)
-//        enemyRadius += 1
         score += 1
         print("Score is \(score)")
     }
@@ -133,24 +135,12 @@ class GameScene: SKScene {
     }
     func gameOver(){
         
-        gameTimer.invalidate()
+        radiusUpdateTimer.invalidate()
         let scene = GameOverScene(size: size)
         scene.score = score
         let reveal = SKTransition.flipHorizontal(withDuration: 0.5)
         self.view?.presentScene(scene, transition: reveal)
     }
-    
-    override func didEvaluateActions() {
-        super.didEvaluateActions()
-//        if enemyCircle.frame.intersects(playerCircle.frame){
-//            gameTimer.invalidate()
-//            let scene = GameOverScene(size: size)
-//            scene.score = score
-//            let reveal = SKTransition.flipHorizontal(withDuration: 0.5)
-//            view?.presentScene(scene, transition: reveal)
-//        }
-    }
-    
     
 }
 
@@ -160,7 +150,7 @@ extension GameScene: SKPhysicsContactDelegate{
         
         var firstBody: SKPhysicsBody
         var secondBody: SKPhysicsBody
-        
+
         if contact.bodyA.categoryBitMask < contact.bodyB.categoryBitMask{
             firstBody = contact.bodyA
             secondBody =  contact.bodyB
@@ -169,19 +159,15 @@ extension GameScene: SKPhysicsContactDelegate{
             secondBody =  contact.bodyA
         }
         
-        if (firstBody.categoryBitMask & enemyCategory) != 0 && (secondBody.categoryBitMask & playerCategory) != 0{
+        if ((firstBody.categoryBitMask & playerCategory != 0) &&
+          (secondBody.categoryBitMask & enemyCategory != 0)) {
+//          if let playerCircle = firstBody.node as? SKShapeNode,
+//            let enemyCircle = secondBody.node as? SKShapeNode {
+            print("contact")
             gameOver()
+//          }
         }
         
-        
-//        if contact.bodyA.categoryBitMask == playerCategory || contact.bodyB.categoryBitMask == playerCategory{
-//            print("contact")
-//            gameTimer.invalidate()
-//            let scene = GameOverScene(size: size)
-//            scene.score = score
-//            let reveal = SKTransition.flipHorizontal(withDuration: 0.5)
-//            view?.presentScene(scene, transition: reveal)
-//        }
     }
     
 }
